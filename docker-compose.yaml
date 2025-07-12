@@ -12,4 +12,5 @@ services:
       - ./tests:/app/tests
       - ./Cargo.toml:/app/Cargo.toml
       - ./Cargo.lock:/app/Cargo.lock
+      - ./.env:/app/.env
       - /app/target

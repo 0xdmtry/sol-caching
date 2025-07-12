@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{Error, ErrorKind};
 
+#[derive(Debug, Clone)]
 pub struct Config {
     pub rpc_url: String,
     pub api_key: String,
