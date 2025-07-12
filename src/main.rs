@@ -1,10 +1,10 @@
 use solana_caching_service::config::Config;
+use solana_caching_service::rpc::SolanaRpcClient;
 use std::process;
 use tracing::{error, info};
-use solana_client::nonblocking::rpc_client::RpcClient;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>>{
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let config = match Config::from_env_file(".env") {
@@ -19,16 +19,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     };
 
     let rpc_url = format!("{}{}", config.rpc_url, config.api_key);
-    let client = RpcClient::new(rpc_url);
+    let client = SolanaRpcClient::new(rpc_url);
 
     info!("Pinning RPC...");
 
-    match client.get_slot().await {
+    // Test 1: get_latest_slot
+    let latest_slot = match client.get_latest_slot().await {
         Ok(slot) => {
             info!("Slot: {}", slot);
+            slot
         }
         Err(e) => {
             error!("Failed to get slot: {}", e);
+            process::exit(1);
+        }
+    };
+
+    // Test 2: get_confirmed_blocks
+    let start_slot = latest_slot.saturating_sub(10);
+
+    info!(
+        "Fetching confirmed blocks from slot {} to {}",
+        start_slot, latest_slot
+    );
+
+    match client.get_confirmed_blocks(start_slot, latest_slot).await {
+        Ok(blocks) => {
+            info!("Confirmed blocks: {:?}", blocks);
+        }
+        Err(e) => {
+            error!("Failed to get confirmed blocks: {}", e)
         }
     }
 
