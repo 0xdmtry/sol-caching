@@ -1,5 +1,6 @@
 use solana_caching_service::config::Config;
 use solana_caching_service::rpc::SolanaRpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use std::process;
 use tracing::{error, info};
 
@@ -19,7 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let rpc_url = format!("{}{}", config.rpc_url, config.api_key);
-    let client = SolanaRpcClient::new(rpc_url);
+    let rpc_client = RpcClient::new(rpc_url);
+    let client = SolanaRpcClient::new(rpc_client);
 
     info!("Pinning RPC...");
 
@@ -43,7 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         start_slot, latest_slot
     );
 
-    match client.get_confirmed_blocks(start_slot, latest_slot).await {
+    match client
+        .get_confirmed_blocks(start_slot, Some(latest_slot))
+        .await
+    {
         Ok(blocks) => {
             info!("Confirmed blocks: {:?}", blocks);
         }
