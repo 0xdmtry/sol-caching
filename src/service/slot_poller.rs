@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-pub fn start_slot_polling<T: RpcApi + 'static>(
+pub fn start_slot_polling<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     poll_interval: Duration,
@@ -16,6 +16,8 @@ pub fn start_slot_polling<T: RpcApi + 'static>(
     tokio::spawn(async move {
         loop {
             sleep(poll_interval).await;
+
+            info!("cache: {:?}", cache);
 
             let latest_on_chain = match rpc_client.get_slot().await {
                 Ok(slot) => slot,

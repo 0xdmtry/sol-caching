@@ -1,9 +1,8 @@
-use crate::{cache::SlotCache, rpc::SolanaRpcClient};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use crate::{cache::SlotCache, rpc::RpcApi};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub rpc_client: Arc<SolanaRpcClient<RpcClient>>,
+    pub rpc_client: Arc<dyn RpcApi + Send + Sync>,
     pub cache: Arc<SlotCache>,
 }

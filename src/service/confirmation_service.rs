@@ -13,11 +13,7 @@ pub async fn check_slot_confirmation(app_state: &AppState, slot: u64) -> Confirm
         return ConfirmationStatus::Confirmed;
     }
 
-    match app_state
-        .rpc_client
-        .get_confirmed_blocks(slot, Some(slot))
-        .await
-    {
+    match app_state.rpc_client.get_blocks(slot, Some(slot)).await {
         Ok(blocks) => {
             if blocks.contains(&slot) {
                 ConfirmationStatus::Confirmed
