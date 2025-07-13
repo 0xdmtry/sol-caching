@@ -1,5 +1,6 @@
 use super::rpc_api::RpcApi;
 use solana_client::client_error::ClientError;
+use std::{future::Future, pin::Pin};
 use tracing::info;
 
 pub struct SolanaRpcClient<T: RpcApi> {
@@ -22,5 +23,21 @@ impl<T: RpcApi> SolanaRpcClient<T> {
         end_slot: Option<u64>,
     ) -> Result<Vec<u64>, ClientError> {
         self.client.get_blocks(start_slot, end_slot).await
+    }
+}
+
+impl<T: RpcApi> RpcApi for SolanaRpcClient<T> {
+    fn get_slot<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<u64, ClientError>> + Send + 'a>> {
+        self.client.get_slot()
+    }
+
+    fn get_blocks<'a>(
+        &'a self,
+        start_slot: u64,
+        end_slot: Option<u64>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u64>, ClientError>> + Send + 'a>> {
+        self.client.get_blocks(start_slot, end_slot)
     }
 }
