@@ -154,6 +154,18 @@ cargo run
 
 ## API Endpoint
 
+### Health Check
+
+A simple health check endpoint that returns a `pong` response, which can be used to verify that the service is running.
+
+* **Endpoint**: `GET /`
+* **Example**:
+  ```sh
+  curl http://localhost:8000/
+  ```
+* **Response**:
+    * **`200 OK`**: with the plain text body `pong`.
+
 ### Check if a Slot is Confirmed
 
 * **Endpoint**: `GET /isSlotConfirmed/:slot`
@@ -176,32 +188,3 @@ The project includes a full test suite that mocks all external dependencies. To 
 ```sh
 cargo test
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
