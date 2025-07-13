@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod config;
 pub mod handler;
+pub mod metrics;
 pub mod routes;
 pub mod rpc;
 pub mod service;

@@ -1,6 +1,6 @@
 use mockall::{Sequence, mock, predicate::*};
 use solana_caching_service::{
-    cache::SlotCache, rpc::RpcApi, service::slot_poller::start_slot_polling,
+    cache::SlotCache, metrics::Metrics, rpc::RpcApi, service::slot_poller::start_slot_polling,
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
@@ -18,9 +18,19 @@ mock! {
     }
 }
 
+mock! {
+    pub Metrics {}
+    impl Metrics for Metrics {
+        fn record_latest_slot(&self, slot: u64);
+        fn record_get_blocks_elapsed(&self, elapsed: Duration);
+        fn record_is_slot_confirmed_elapsed(&self, elapsed: Duration);
+    }
+}
+
 #[tokio::test]
 async fn test_poller_populates_empty_cache() {
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
     let cache = Arc::new(SlotCache::new(20));
 
     mock_rpc
@@ -34,9 +44,25 @@ async fn test_poller_populates_empty_cache() {
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(vec![95, 96, 98]) }));
 
-    let rpc_client = Arc::new(mock_rpc);
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .with(eq(98))
+        .times(1)
+        .return_const(());
 
-    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+    );
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     assert!(cache.contains(&95).await);
@@ -51,6 +77,7 @@ async fn test_poller_fetches_from_latest_cached() {
     cache.insert(100).await;
 
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
 
     mock_rpc
         .expect_get_slot()
@@ -63,9 +90,25 @@ async fn test_poller_fetches_from_latest_cached() {
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(vec![102, 104]) }));
 
-    let rpc_client = Arc::new(mock_rpc);
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .with(eq(104))
+        .times(1)
+        .return_const(());
 
-    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+    );
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     assert!(cache.contains(&100).await);
@@ -79,6 +122,7 @@ async fn test_poller_does_nothing_if_up_to_date() {
     cache.insert(100).await;
 
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
 
     mock_rpc
         .expect_get_slot()
@@ -87,9 +131,18 @@ async fn test_poller_does_nothing_if_up_to_date() {
 
     mock_rpc.expect_get_blocks().times(0);
 
-    let rpc_client = Arc::new(mock_rpc);
+    mock_metrics.expect_record_get_blocks_elapsed().times(0);
+    mock_metrics.expect_record_latest_slot().times(0);
 
-    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+    );
     tokio::time::sleep(Duration::from_millis(50)).await;
 }
 
@@ -97,6 +150,7 @@ async fn test_poller_does_nothing_if_up_to_date() {
 async fn test_poller_handles_rpc_error() {
     let cache = Arc::new(SlotCache::new(20));
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
     let mut seq = Sequence::new();
 
     mock_rpc
@@ -123,9 +177,25 @@ async fn test_poller_handles_rpc_error() {
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(vec![45]) }));
 
-    let rpc_client = Arc::new(mock_rpc);
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .with(eq(45))
+        .times(1)
+        .return_const(());
 
-    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(20));
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(20),
+    );
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     assert!(cache.contains(&45).await);

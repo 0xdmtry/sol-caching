@@ -1,12 +1,13 @@
 use mockall::{mock, predicate::*};
 use solana_caching_service::{
     cache::SlotCache,
+    metrics::Metrics,
     rpc::RpcApi,
     service::confirmation_service::{ConfirmationStatus, check_slot_confirmation},
     state::AppState,
 };
 use solana_client::client_error::ClientError;
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 
 mock! {
     pub RpcApi {}
@@ -20,10 +21,24 @@ mock! {
     }
 }
 
-fn create_test_app_state(mock_rpc: MockRpcApi, cache: Arc<SlotCache>) -> AppState {
+mock! {
+    pub Metrics {}
+    impl Metrics for Metrics {
+        fn record_latest_slot(&self, slot: u64);
+        fn record_get_blocks_elapsed(&self, elapsed: Duration);
+        fn record_is_slot_confirmed_elapsed(&self, elapsed: Duration);
+    }
+}
+
+fn create_test_app_state(
+    mock_rpc: MockRpcApi,
+    cache: Arc<SlotCache>,
+    mock_metrics: MockMetrics,
+) -> AppState {
     AppState {
         rpc_client: Arc::new(mock_rpc),
         cache,
+        metrics: Arc::new(mock_metrics),
     }
 }
 
@@ -35,7 +50,13 @@ async fn test_service_cache_hit() {
     let mut mock_rpc = MockRpcApi::new();
     mock_rpc.expect_get_blocks().times(0);
 
-    let app_state = create_test_app_state(mock_rpc, cache);
+    let mut mock_metrics = MockMetrics::new();
+    mock_metrics
+        .expect_record_is_slot_confirmed_elapsed()
+        .times(1)
+        .return_const(());
+
+    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
 
     let result = check_slot_confirmation(&app_state, 123).await;
 
@@ -46,6 +67,7 @@ async fn test_service_cache_hit() {
 async fn test_service_cache_miss_rpc_confirmed() {
     let cache = Arc::new(SlotCache::new(10));
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
 
     mock_rpc
         .expect_get_blocks()
@@ -53,7 +75,12 @@ async fn test_service_cache_miss_rpc_confirmed() {
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(vec![456]) }));
 
-    let app_state = create_test_app_state(mock_rpc, cache);
+    mock_metrics
+        .expect_record_is_slot_confirmed_elapsed()
+        .times(1)
+        .return_const(());
+
+    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
 
     let result = check_slot_confirmation(&app_state, 456).await;
 
@@ -64,6 +91,7 @@ async fn test_service_cache_miss_rpc_confirmed() {
 async fn test_service_cache_miss_rpc_not_confirmed() {
     let cache = Arc::new(SlotCache::new(10));
     let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
 
     mock_rpc
         .expect_get_blocks()
@@ -71,7 +99,12 @@ async fn test_service_cache_miss_rpc_not_confirmed() {
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(vec![]) }));
 
-    let app_state = create_test_app_state(mock_rpc, cache);
+    mock_metrics
+        .expect_record_is_slot_confirmed_elapsed()
+        .times(1)
+        .return_const(());
+
+    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
 
     let result = check_slot_confirmation(&app_state, 789).await;
 

@@ -1,11 +1,12 @@
-use crate::{cache::SlotCache, rpc::RpcApi};
+use crate::{cache::SlotCache, metrics::Metrics, rpc::RpcApi};
 use std::{sync::Arc, time::Duration};
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep};
 use tracing::{info, warn};
 
 pub fn start_slot_polling<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
+    metrics: Arc<dyn Metrics + Send + Sync>,
     poll_interval: Duration,
 ) {
     info!(
@@ -42,11 +43,19 @@ pub fn start_slot_polling<T: RpcApi + 'static + ?Sized>(
                 start_slot, latest_on_chain
             );
 
-            match rpc_client
+            let now = Instant::now();
+            let blocks_result = rpc_client
                 .get_blocks(start_slot, Some(latest_on_chain))
-                .await
-            {
+                .await;
+
+            metrics.record_get_blocks_elapsed(now.elapsed());
+
+            match blocks_result {
                 Ok(slots) => {
+                    if let Some(&latest_slot) = slots.iter().max() {
+                        metrics.record_latest_slot(latest_slot);
+                    }
+
                     info!("Found {} new confirmed slots to cache.", slots.len());
                     for slot in slots {
                         cache.insert(slot).await;
