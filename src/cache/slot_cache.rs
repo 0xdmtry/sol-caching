@@ -3,8 +3,6 @@ use std::collections::VecDeque;
 use tokio::sync::RwLock;
 use tracing::trace;
 
-const CACHE_CAPACITY: usize = 10;
-
 #[derive(Debug)]
 pub struct SlotCache {
     slots: HashMap<u64, ()>,
@@ -13,11 +11,11 @@ pub struct SlotCache {
 }
 
 impl SlotCache {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             slots: HashMap::new(),
-            order: RwLock::new(VecDeque::with_capacity(CACHE_CAPACITY)),
-            capacity: CACHE_CAPACITY,
+            order: RwLock::new(VecDeque::with_capacity(capacity)),
+            capacity: capacity,
         }
     }
 
@@ -41,11 +39,5 @@ impl SlotCache {
                 }
             }
         }
-    }
-}
-
-impl Default for SlotCache {
-    fn default() -> Self {
-        Self::new()
     }
 }
