@@ -1,0 +1,132 @@
+use mockall::{Sequence, mock, predicate::*};
+use solana_caching_service::{
+    cache::SlotCache, rpc::RpcApi, service::slot_poller::start_slot_polling,
+};
+use solana_client::client_error::{ClientError, ClientErrorKind};
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+
+mock! {
+    pub RpcApi {}
+    impl RpcApi for RpcApi {
+        fn get_slot<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<u64, ClientError>> + Send + 'a>>;
+
+        fn get_blocks<'a>(
+            &'a self,
+            start_slot: u64,
+            end_slot: Option<u64>,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<u64>, ClientError>> + Send + 'a>>;
+    }
+}
+
+#[tokio::test]
+async fn test_poller_populates_empty_cache() {
+    let mut mock_rpc = MockRpcApi::new();
+    let cache = Arc::new(SlotCache::new(20));
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(100) }));
+
+    mock_rpc
+        .expect_get_blocks()
+        .with(eq(90), eq(Some(100)))
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(vec![95, 96, 98]) }));
+
+    let rpc_client = Arc::new(mock_rpc);
+
+    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert!(cache.contains(&95).await);
+    assert!(cache.contains(&96).await);
+    assert!(cache.contains(&98).await);
+    assert!(!cache.contains(&97).await);
+}
+
+#[tokio::test]
+async fn test_poller_fetches_from_latest_cached() {
+    let cache = Arc::new(SlotCache::new(20));
+    cache.insert(100).await;
+
+    let mut mock_rpc = MockRpcApi::new();
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(105) }));
+
+    mock_rpc
+        .expect_get_blocks()
+        .with(eq(101), eq(Some(105)))
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(vec![102, 104]) }));
+
+    let rpc_client = Arc::new(mock_rpc);
+
+    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert!(cache.contains(&100).await);
+    assert!(cache.contains(&102).await);
+    assert!(cache.contains(&104).await);
+}
+
+#[tokio::test]
+async fn test_poller_does_nothing_if_up_to_date() {
+    let cache = Arc::new(SlotCache::new(20));
+    cache.insert(100).await;
+
+    let mut mock_rpc = MockRpcApi::new();
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(100) }));
+
+    mock_rpc.expect_get_blocks().times(0);
+
+    let rpc_client = Arc::new(mock_rpc);
+
+    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(10));
+    tokio::time::sleep(Duration::from_millis(50)).await;
+}
+
+#[tokio::test]
+async fn test_poller_handles_rpc_error() {
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut seq = Sequence::new();
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(move || {
+            let rpc_error = ClientError {
+                kind: ClientErrorKind::Custom("RPC down".to_string()),
+                request: None,
+            };
+            Box::pin(async { Err(rpc_error) })
+        });
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|| Box::pin(async { Ok(50) }));
+
+    mock_rpc
+        .expect_get_blocks()
+        .with(eq(40), eq(Some(50)))
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(vec![45]) }));
+
+    let rpc_client = Arc::new(mock_rpc);
+
+    start_slot_polling(rpc_client, cache.clone(), Duration::from_millis(20));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    assert!(cache.contains(&45).await);
+}

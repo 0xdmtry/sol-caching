@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Error, ErrorKind};
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub rpc_url: String,
     pub api_key: String,
+    pub poll_interval: Duration,
+    pub cache_capacity: usize,
 }
 
 impl Config {
@@ -16,12 +19,29 @@ impl Config {
             .get("SOLANA_RPC_URL")
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "SOLANA_RPC_URL is not set"))?
             .clone();
+
         let api_key = vars
             .get("API_KEY")
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "API_KEY is not set"))?
             .clone();
 
-        Ok(Config { rpc_url, api_key })
+        let poll_interval_seconds = vars
+            .get("POLL_INTERVAL_SECONDS")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(15);
+        let poll_interval = Duration::from_secs(poll_interval_seconds);
+
+        let cache_capacity = vars
+            .get("CACHE_CAPACITY")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1000);
+
+        Ok(Config {
+            rpc_url,
+            api_key,
+            poll_interval,
+            cache_capacity,
+        })
     }
 }
 
