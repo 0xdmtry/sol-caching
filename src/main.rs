@@ -2,7 +2,8 @@ use solana_caching_service::metrics::LoggingMetrics;
 use solana_caching_service::metrics::Metrics;
 use solana_caching_service::{
     cache::SlotCache, config::Config, routes::create_router, rpc::RpcApi,
-    service::slot_poller::start_slot_polling, state::AppState,
+    service::slot_poller::start_slot_polling, service::slot_poller::start_slot_polling_with_retry,
+    state::AppState,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::net::SocketAddr;
@@ -21,11 +22,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = Arc::new(SlotCache::new(config.cache_capacity));
     let metrics: Arc<dyn Metrics + Send + Sync> = Arc::new(LoggingMetrics);
 
-    start_slot_polling(
+    start_slot_polling_with_retry(
         rpc_client.clone(),
         cache.clone(),
         metrics.clone(),
         config.poll_interval,
+        config.max_retries,
+        config.initial_backoff,
     );
 
     let app_state = AppState {

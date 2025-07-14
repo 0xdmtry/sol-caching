@@ -9,6 +9,8 @@ pub struct Config {
     pub api_key: String,
     pub poll_interval: Duration,
     pub cache_capacity: usize,
+    pub max_retries: u32,
+    pub initial_backoff: Duration,
 }
 
 impl Config {
@@ -36,11 +38,38 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1000);
 
+        let max_retries = vars
+            .get("MAX_RETRIES")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3);
+
+        let initial_backoff_ms = vars
+            .get("INITIAL_BACKOFF_MS")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(500);
+        let initial_backoff = Duration::from_millis(initial_backoff_ms);
+
+        // Calculate max possible retries
+        let max_retry_sleep_duration_ms: u64 = (0..max_retries)
+            .map(|i| initial_backoff_ms * 2_u64.pow(i))
+            .sum();
+
+        // Compare max possible retries with requested max retries
+        // If the requested is smaller of max possible, error is returned
+        if max_retry_sleep_duration_ms >= poll_interval.as_millis() as u64 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Config error: Max possible retries exceeds the polling interval: either increase POLL_INTERVAL_SECONDS or decrease MAX_RETRIES/ INITIAL_BACKOFF_MS",
+            ));
+        }
+
         Ok(Config {
             rpc_url,
             api_key,
             poll_interval,
             cache_capacity,
+            max_retries,
+            initial_backoff,
         })
     }
 }

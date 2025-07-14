@@ -1,6 +1,7 @@
 use mockall::{Sequence, mock, predicate::*};
 use solana_caching_service::{
     cache::SlotCache, metrics::Metrics, rpc::RpcApi, service::slot_poller::start_slot_polling,
+    service::slot_poller::start_slot_polling_with_retry,
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
@@ -199,4 +200,74 @@ async fn test_poller_handles_rpc_error() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     assert!(cache.contains(&45).await);
+}
+
+#[tokio::test]
+async fn test_poller_with_retry_succeeds_after_failures() {
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
+    let mut seq = Sequence::new();
+
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| {
+            let err = ClientError {
+                kind: ClientErrorKind::Custom("fail 1".into()),
+                request: None,
+            };
+            Box::pin(async { Err(err) })
+        });
+
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| {
+            let err = ClientError {
+                kind: ClientErrorKind::Custom("fail 2".into()),
+                request: None,
+            };
+            Box::pin(async { Err(err) })
+        });
+
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Box::pin(async { Ok(vec![205, 208]) }));
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(210) }));
+
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .with(eq(208))
+        .times(1)
+        .return_const(());
+
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling_with_retry(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+        3,
+        Duration::from_millis(5),
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    assert!(cache.contains(&205).await);
+    assert!(cache.contains(&208).await);
 }
