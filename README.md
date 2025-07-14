@@ -60,6 +60,15 @@ The background polling service (`slot_poller`) implements a retry mechanism for 
 
 This prevents temporary network glitches from interrupting the caching process.
 
+### Intelligent Retry with Exponential Backoff
+
+The background polling service implements a "smart" retry mechanism for its RPC calls. It classifies errors to decide whether an operation is worth retrying.
+
+* **Transient Errors**: If a call fails with a temporary network issue (e.g., a timeout or connection error), the service will not give up. It will wait for an initial backoff period, retry the operation, and double the backoff period for each subsequent failure, up to a configurable maximum number of attempts.
+* **Permanent Errors**: If a call fails with a non-transient error (e.g., an invalid API key or a malformed request), the service will fail immediately, log a critical error, and will **not** attempt to retry.
+
+This intelligent classification makes the poller highly efficient, preventing it from wasting time and resources on operations that are guaranteed to fail.
+
 ### Configuration Guard Logic
 
 To prevent a situation where the retry backoff periods could overlap with the next scheduled poll, the application performs a validation check on startup. It calculates the maximum possible time the retry logic could take and compares it against the main polling interval. If the retry duration could exceed the interval, the application will refuse to start and will log a fatal configuration error, ensuring predictable behavior.
