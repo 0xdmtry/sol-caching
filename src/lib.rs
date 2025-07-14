@@ -5,5 +5,6 @@ pub mod metrics;
 pub mod routes;
 pub mod rpc;
 pub mod service;
+pub mod signals;
 pub mod state;
 pub mod utils;
