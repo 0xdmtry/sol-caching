@@ -11,6 +11,8 @@ pub struct Config {
     pub cache_capacity: usize,
     pub max_retries: u32,
     pub initial_backoff: Duration,
+    pub circuit_failure_threshold: u32,
+    pub circuit_open_duration: Duration,
 }
 
 impl Config {
@@ -63,6 +65,17 @@ impl Config {
             ));
         }
 
+        let circuit_failure_threshold = vars
+            .get("CIRCUIT_FAILURE_THRESHOLD")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+
+        let circuit_open_duration_secs = vars
+            .get("CIRCUIT_OPEN_DURATION_SECS")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
+        let circuit_open_duration = Duration::from_secs(circuit_open_duration_secs);
+
         Ok(Config {
             rpc_url,
             api_key,
@@ -70,6 +83,8 @@ impl Config {
             cache_capacity,
             max_retries,
             initial_backoff,
+            circuit_failure_threshold,
+            circuit_open_duration,
         })
     }
 }

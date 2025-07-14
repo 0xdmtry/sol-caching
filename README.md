@@ -94,6 +94,19 @@ The service implements a graceful shutdown mechanism. When a shutdown signal (li
 
 This ensures that the service shuts down predictably without interrupting ongoing operations.
 
+### Circuit Breaker Pattern
+
+The service implements a circuit breaker to protect itself from repeatedly calling a downstream service that is known to
+be failing.
+
+* **Monitoring**: The circuit breaker tracks consecutive failures from RPC calls.
+* **Opening the Circuit**: If the number of failures exceeds a configurable threshold, the circuit "opens." While open,
+  all subsequent RPC calls are blocked immediately without a network request, returning an error instantly. This
+  prevents the application from wasting resources on a failing dependency and gives the external service time to
+  recover.
+* **Recovery**: After a configured timeout, the circuit moves to a "half-open" state, allowing a single test request
+  through. If it succeeds, the circuit closes and normal operation resumes. If it fails, the circuit opens again.
+
 -----
 
 ## Setup and Running
@@ -166,6 +179,12 @@ MAX_RETRIES=3
 
 # The initial delay for the first retry, in milliseconds
 INITIAL_BACKOFF_MS=500
+
+# Number of consecutive failures before the circuit opens
+CIRCUIT_FAILURE_THRESHOLD=5
+
+# How long the circuit stays open before moving to half-open, in seconds
+CIRCUIT_OPEN_DURATION_SECS=30
 ```
 
 **3. Run the Service**
@@ -203,6 +222,12 @@ MAX_RETRIES=3
 
 # The initial delay for the first retry, in milliseconds
 INITIAL_BACKOFF_MS=500
+
+# Number of consecutive failures before the circuit opens
+CIRCUIT_FAILURE_THRESHOLD=5
+
+# How long the circuit stays open before moving to half-open, in seconds
+CIRCUIT_OPEN_DURATION_SECS=30
 ```
 
 **2. Build and Run**
