@@ -12,7 +12,8 @@ Rust.
 
 * **Continuous Caching**: A background service continuously polls for the latest confirmed slots and stores them in a
   fixed-size in-memory cache.
-* **Configurable**: Cache capacity and RPC polling interval can be configured via a `.env` file.
+* **Fault-Tolerant Polling**: The background service includes a configurable retry mechanism with exponential backoff, making it resilient to transient RPC errors.
+* **Configurable**: Cache capacity, polling interval, and retry strategy can be configured via a `.env` file.
 * **HTTP API**: Exposes a single, simple endpoint (`/isSlotConfirmed/:slot`) to check the confirmation status of a given
   slot.
 * **RPC Fallback**: If a requested slot is not found in the cache (i.e., it's an older slot), the service automatically
@@ -42,6 +43,26 @@ The service is designed with a clean separation of concerns, organized into seve
 
 The entire application is containerized using Docker, ensuring a consistent environment for both development and
 deployment.
+
+-----
+
+## Fault Tolerance
+
+The service is designed to be resilient to transient network or RPC provider issues.
+
+### Retry with Exponential Backoff
+
+The background polling service (`slot_poller`) implements a retry mechanism for its RPC calls. If a call to fetch blocks fails, the service will not immediately give up. Instead, it will:
+
+1.  Wait for an initial backoff period (e.g., 500ms).
+2.  Retry the operation.
+3.  If it fails again, it will double the backoff period (1s, 2s, etc.) and retry up to a configurable maximum number of attempts.
+
+This prevents temporary network glitches from interrupting the caching process.
+
+### Configuration Guard Logic
+
+To prevent a situation where the retry backoff periods could overlap with the next scheduled poll, the application performs a validation check on startup. It calculates the maximum possible time the retry logic could take and compares it against the main polling interval. If the retry duration could exceed the interval, the application will refuse to start and will log a fatal configuration error, ensuring predictable behavior.
 
 -----
 
@@ -109,6 +130,12 @@ POLL_INTERVAL_SECONDS=5
 
 # The maximum number of slots to hold in the cache
 CACHE_CAPACITY=10000
+
+# The maximum number of times to retry a failed RPC call
+MAX_RETRIES=3
+
+# The initial delay for the first retry, in milliseconds
+INITIAL_BACKOFF_MS=500
 ```
 
 **3. Run the Service**
@@ -140,6 +167,12 @@ POLL_INTERVAL_SECONDS=5
 
 # The maximum number of slots to hold in the cache
 CACHE_CAPACITY=10000
+
+# The maximum number of times to retry a failed RPC call
+MAX_RETRIES=3
+
+# The initial delay for the first retry, in milliseconds
+INITIAL_BACKOFF_MS=500
 ```
 
 **2. Build and Run**
