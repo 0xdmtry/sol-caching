@@ -5,7 +5,7 @@ use solana_caching_service::{
     config::Config,
     routes::create_router,
     rpc::RpcApi,
-    service::slot_poller::start_slot_polling_with_retry,
+    service::slot_poller::start_slot_polling_with_transient_retry,
     state::AppState,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lru_cache = Arc::new(LruCache::new(config.lru_cache_capacity));
     let metrics: Arc<dyn Metrics + Send + Sync> = Arc::new(LoggingMetrics);
 
-    start_slot_polling_with_retry(
+    start_slot_polling_with_transient_retry(
         rpc_client.clone(),
         cache.clone(),
         metrics.clone(),

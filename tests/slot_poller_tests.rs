@@ -1,10 +1,14 @@
 use mockall::{Sequence, mock, predicate::*};
 use solana_caching_service::{
-    cache::SlotCache, metrics::Metrics, rpc::RpcApi, service::slot_poller::start_slot_polling,
-    service::slot_poller::start_slot_polling_with_retry,
+    cache::SlotCache,
+    metrics::Metrics,
+    rpc::RpcApi,
+    service::slot_poller::{
+        start_slot_polling, start_slot_polling_with_retry, start_slot_polling_with_transient_retry,
+    },
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{future::Future, io, pin::Pin, sync::Arc, time::Duration};
 
 mock! {
     pub RpcApi {}
@@ -270,4 +274,104 @@ async fn test_poller_with_retry_succeeds_after_failures() {
 
     assert!(cache.contains(&205).await);
     assert!(cache.contains(&208).await);
+}
+
+#[tokio::test]
+async fn test_transient_poller_retries_on_transient_error() {
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
+    let mut seq = Sequence::new();
+
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| {
+            // Create a standard library I/O error to simulate a transient failure.
+            let io_error = io::Error::new(io::ErrorKind::TimedOut, "test timeout");
+            let err = ClientError {
+                kind: ClientErrorKind::Io(io_error),
+                request: None,
+            };
+            Box::pin(async { Err(err) })
+        });
+
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| Box::pin(async { Ok(vec![205, 208]) }));
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(210) }));
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .with(eq(208))
+        .times(1)
+        .return_const(());
+
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling_with_transient_retry(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+        3,
+        Duration::from_millis(5),
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    assert!(cache.contains(&205).await);
+    assert!(cache.contains(&208).await);
+}
+
+#[tokio::test]
+async fn test_transient_poller_fails_immediately_on_non_transient_error() {
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
+
+    mock_rpc.expect_get_blocks().times(1).returning(|_, _| {
+        let err = ClientError {
+            kind: ClientErrorKind::Custom("Permanent error".into()),
+            request: None,
+        };
+        Box::pin(async { Err(err) })
+    });
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(210) }));
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics.expect_record_latest_slot().times(0);
+
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling_with_transient_retry(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        Duration::from_millis(10),
+        3,
+        Duration::from_millis(5),
+    );
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    assert_eq!(cache.get_latest_cached_slot().await, None);
 }
