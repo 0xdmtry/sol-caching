@@ -5,13 +5,15 @@ use solana_caching_service::{
     config::Config,
     routes::create_router,
     rpc::RpcApi,
-    service::slot_poller::start_slot_polling_with_transient_retry,
+    service::slot_poller::start_slot_polling_with_transient_retry_and_signals,
+    signals::shutdown_signal,
     state::AppState,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tracing::info;
 
 #[tokio::main]
@@ -20,19 +22,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::from_env_file(".env").expect("Failed to load config");
 
+    let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
+
     let rpc_url = format!("{}{}", config.rpc_url, config.api_key);
     let rpc_client: Arc<dyn RpcApi + Send + Sync> = Arc::new(RpcClient::new(rpc_url));
     let cache = Arc::new(SlotCache::new(config.cache_capacity));
     let lru_cache = Arc::new(LruCache::new(config.lru_cache_capacity));
     let metrics: Arc<dyn Metrics + Send + Sync> = Arc::new(LoggingMetrics);
 
-    start_slot_polling_with_transient_retry(
+    start_slot_polling_with_transient_retry_and_signals(
         rpc_client.clone(),
         cache.clone(),
         metrics.clone(),
         config.poll_interval,
         config.max_retries,
         config.initial_backoff,
+        shutdown_rx,
     );
 
     let app_state = AppState {
@@ -48,7 +53,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Running server on {}", addr);
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            let _ = shutdown_tx.send(());
+        })
+        .await?;
 
     Ok(())
 }
