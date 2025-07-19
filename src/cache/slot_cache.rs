@@ -40,4 +40,8 @@ impl SlotCache {
             }
         }
     }
+
+    pub async fn get_all_slots(&self) -> Vec<u64> {
+        self.order.read().await.iter().cloned().collect()
+    }
 }

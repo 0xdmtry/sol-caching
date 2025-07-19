@@ -64,4 +64,8 @@ impl LruCache {
             }
         }
     }
+
+    pub async fn get_all_slots(&self) -> Vec<u64> {
+        self.inner.lock().await.order.iter().cloned().collect()
+    }
 }
