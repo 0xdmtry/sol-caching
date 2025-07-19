@@ -5,8 +5,8 @@ use solana_caching_service::{
     metrics::Metrics,
     rpc::RpcApi,
     service::confirmation_service::{
-        ConfirmationStatus, check_slot_confirmation, check_slot_confirmation_with_lru,
-        check_slot_confirmation_with_lru_and_circuit_breaker,
+        ConfirmationStatus, confirm, confirm_with_lru,
+        confirm_with_lru_and_breaker,
     },
     state::AppState,
 };
@@ -83,7 +83,7 @@ async fn test_service_cache_hit() {
 
     let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
-    let result = check_slot_confirmation(&app_state, 123).await;
+    let result = confirm(&app_state, 123).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
 }
@@ -108,7 +108,7 @@ async fn test_service_cache_miss_rpc_confirmed() {
 
     let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
-    let result = check_slot_confirmation(&app_state, 456).await;
+    let result = confirm(&app_state, 456).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
 }
@@ -133,7 +133,7 @@ async fn test_service_cache_miss_rpc_not_confirmed() {
 
     let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
-    let result = check_slot_confirmation(&app_state, 789).await;
+    let result = confirm(&app_state, 789).await;
 
     assert_eq!(result, ConfirmationStatus::NotConfirmed);
 }
@@ -153,7 +153,7 @@ async fn test_lru_service_hit_in_primary_cache() {
         .return_const(());
 
     let app_state = create_test_app_state(mock_rpc, primary_cache, lru_cache, mock_metrics);
-    let result = check_slot_confirmation_with_lru(&app_state, 100).await;
+    let result = confirm_with_lru(&app_state, 100).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
 }
@@ -173,7 +173,7 @@ async fn test_lru_service_hit_in_lru_cache() {
         .return_const(());
 
     let app_state = create_test_app_state(mock_rpc, primary_cache, lru_cache, mock_metrics);
-    let result = check_slot_confirmation_with_lru(&app_state, 200).await;
+    let result = confirm_with_lru(&app_state, 200).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
 }
@@ -197,7 +197,7 @@ async fn test_lru_service_miss_both_caches_rpc_confirms_and_caches() {
 
     let app_state = create_test_app_state(mock_rpc, primary_cache, lru_cache.clone(), mock_metrics);
 
-    let result = check_slot_confirmation_with_lru(&app_state, 300).await;
+    let result = confirm_with_lru(&app_state, 300).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
     assert!(
@@ -225,7 +225,7 @@ async fn test_lru_service_miss_both_caches_rpc_not_confirmed() {
 
     let app_state = create_test_app_state(mock_rpc, primary_cache, lru_cache.clone(), mock_metrics);
 
-    let result = check_slot_confirmation_with_lru(&app_state, 400).await;
+    let result = confirm_with_lru(&app_state, 400).await;
 
     assert_eq!(result, ConfirmationStatus::NotConfirmed);
     assert!(
@@ -260,7 +260,7 @@ async fn test_cb_service_succeeds_when_circuit_is_closed() {
         circuit_breaker,
     );
 
-    let result = check_slot_confirmation_with_lru_and_circuit_breaker(&app_state, 100).await;
+    let result = confirm_with_lru_and_breaker(&app_state, 100).await;
 
     assert_eq!(result, ConfirmationStatus::Confirmed);
     assert!(lru_cache.get(&100).await);
@@ -299,9 +299,9 @@ async fn test_cb_service_trips_circuit_and_then_rejects_request() {
         circuit_breaker,
     );
 
-    let first_result = check_slot_confirmation_with_lru_and_circuit_breaker(&app_state, 200).await;
+    let first_result = confirm_with_lru_and_breaker(&app_state, 200).await;
     assert_eq!(first_result, ConfirmationStatus::Error);
 
-    let second_result = check_slot_confirmation_with_lru_and_circuit_breaker(&app_state, 201).await;
+    let second_result = confirm_with_lru_and_breaker(&app_state, 201).await;
     assert_eq!(second_result, ConfirmationStatus::Error);
 }

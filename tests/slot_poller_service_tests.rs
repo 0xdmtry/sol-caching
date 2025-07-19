@@ -5,9 +5,9 @@ use solana_caching_service::{
     metrics::Metrics,
     rpc::RpcApi,
     service::slot_poller::{
-        start_slot_polling, start_slot_polling_with_retry, start_slot_polling_with_transient_retry,
-        start_slot_polling_with_transient_retry_and_signals,
-        start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker,
+        poll, poll_with_retry, poll_with_transient_retry,
+        poll_with_transient_retry_and_signals,
+        poll_with_transient_retry_and_signals_and_breaker,
     },
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -66,7 +66,7 @@ async fn test_poller_populates_empty_cache() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling(
+    poll(
         rpc_client,
         cache.clone(),
         metrics,
@@ -112,7 +112,7 @@ async fn test_poller_fetches_from_latest_cached() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling(
+    poll(
         rpc_client,
         cache.clone(),
         metrics,
@@ -146,7 +146,7 @@ async fn test_poller_does_nothing_if_up_to_date() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling(
+    poll(
         rpc_client,
         cache.clone(),
         metrics,
@@ -199,7 +199,7 @@ async fn test_poller_handles_rpc_error() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling(
+    poll(
         rpc_client,
         cache.clone(),
         metrics,
@@ -265,7 +265,7 @@ async fn test_poller_with_retry_succeeds_after_failures() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_retry(
+    poll_with_retry(
         rpc_client,
         cache.clone(),
         metrics,
@@ -324,7 +324,7 @@ async fn test_transient_poller_retries_on_transient_error() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_transient_retry(
+    poll_with_transient_retry(
         rpc_client,
         cache.clone(),
         metrics,
@@ -366,7 +366,7 @@ async fn test_transient_poller_fails_immediately_on_non_transient_error() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_transient_retry(
+    poll_with_transient_retry(
         rpc_client,
         cache.clone(),
         metrics,
@@ -408,7 +408,7 @@ async fn test_poller_with_signals_shuts_down_gracefully() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_transient_retry_and_signals(
+    poll_with_transient_retry_and_signals(
         rpc_client,
         cache.clone(),
         metrics,
@@ -456,7 +456,7 @@ async fn test_final_poller_works_when_circuit_is_closed() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
+    poll_with_transient_retry_and_signals_and_breaker(
         rpc_client,
         cache.clone(),
         metrics,
@@ -508,7 +508,7 @@ async fn test_final_poller_is_blocked_by_open_circuit() {
     let rpc_client = Arc::new(mock_rpc);
     let metrics = Arc::new(mock_metrics);
 
-    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
+    poll_with_transient_retry_and_signals_and_breaker(
         rpc_client,
         cache.clone(),
         metrics,

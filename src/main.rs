@@ -6,7 +6,7 @@ use solana_caching_service::{
     config::Config,
     routes::create_router,
     rpc::RpcApi,
-    service::slot_poller::start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker,
+    service::slot_poller::poll_with_transient_retry_and_signals_and_breaker,
     signals::shutdown_signal,
     state::AppState,
 };
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.circuit_open_duration,
     ));
 
-    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
+    poll_with_transient_retry_and_signals_and_breaker(
         rpc_client.clone(),
         cache.clone(),
         metrics.clone(),

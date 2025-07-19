@@ -10,7 +10,7 @@ pub enum ConfirmationStatus {
     Error,
 }
 
-pub async fn check_slot_confirmation(app_state: &AppState, slot: u64) -> ConfirmationStatus {
+pub async fn confirm(app_state: &AppState, slot: u64) -> ConfirmationStatus {
     let now = Instant::now();
 
     let status = if app_state.cache.contains(&slot).await {
@@ -38,7 +38,7 @@ pub async fn check_slot_confirmation(app_state: &AppState, slot: u64) -> Confirm
     status
 }
 
-pub async fn check_slot_confirmation_with_lru(
+pub async fn confirm_with_lru(
     app_state: &AppState,
     slot: u64,
 ) -> ConfirmationStatus {
@@ -73,7 +73,7 @@ pub async fn check_slot_confirmation_with_lru(
     status
 }
 
-pub async fn check_slot_confirmation_with_lru_and_circuit_breaker(
+pub async fn confirm_with_lru_and_breaker(
     app_state: &AppState,
     slot: u64,
 ) -> ConfirmationStatus {

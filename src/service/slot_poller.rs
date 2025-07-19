@@ -6,7 +6,7 @@ use tokio::sync::broadcast;
 use tokio::time::{Instant, sleep};
 use tracing::{info, warn};
 
-pub fn start_slot_polling<T: RpcApi + 'static + ?Sized>(
+pub fn poll<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     metrics: Arc<dyn Metrics + Send + Sync>,
@@ -72,7 +72,7 @@ pub fn start_slot_polling<T: RpcApi + 'static + ?Sized>(
     });
 }
 
-pub fn start_slot_polling_with_retry<T: RpcApi + 'static + ?Sized>(
+pub fn poll_with_retry<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     metrics: Arc<dyn Metrics + Send + Sync>,
@@ -135,7 +135,7 @@ pub fn start_slot_polling_with_retry<T: RpcApi + 'static + ?Sized>(
     });
 }
 
-pub fn start_slot_polling_with_transient_retry<T: RpcApi + 'static + ?Sized>(
+pub fn poll_with_transient_retry<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     metrics: Arc<dyn Metrics + Send + Sync>,
@@ -198,7 +198,7 @@ pub fn start_slot_polling_with_transient_retry<T: RpcApi + 'static + ?Sized>(
     });
 }
 
-pub fn start_slot_polling_with_transient_retry_and_signals<T: RpcApi + 'static + ?Sized>(
+pub fn poll_with_transient_retry_and_signals<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     metrics: Arc<dyn Metrics + Send + Sync>,
@@ -270,9 +270,7 @@ pub fn start_slot_polling_with_transient_retry_and_signals<T: RpcApi + 'static +
     });
 }
 
-pub fn start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker<
-    T: RpcApi + 'static + ?Sized,
->(
+pub fn poll_with_transient_retry_and_signals_and_breaker<T: RpcApi + 'static + ?Sized>(
     rpc_client: Arc<T>,
     cache: Arc<SlotCache>,
     metrics: Arc<dyn Metrics + Send + Sync>,
