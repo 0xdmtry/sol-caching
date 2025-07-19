@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map::Entry;
 use tokio::sync::Mutex;
 
 // Simplistic implementation of LRU,
@@ -51,15 +52,18 @@ impl LruCache {
     pub async fn put(&self, key: u64) {
         let mut inner = self.inner.lock().await;
 
-        if inner.map.contains_key(&key) {
-            inner.move_to_front(key);
-        } else {
-            inner.order.push_front(key);
-            inner.map.insert(key, ());
+        match inner.map.entry(key) {
+            Entry::Occupied(_) => {
+                inner.move_to_front(key);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(());
+                inner.order.push_front(key);
 
-            if inner.order.len() > inner.capacity {
-                if let Some(lru_key) = inner.order.pop_back() {
-                    inner.map.remove(&lru_key);
+                if inner.order.len() > inner.capacity {
+                    if let Some(lru_key) = inner.order.pop_back() {
+                        inner.map.remove(&lru_key);
+                    }
                 }
             }
         }
