@@ -31,14 +31,52 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:8000/isSlotConfirmed/353110309",
+					"raw": "localhost:8000/isSlotConfirmed/354390471",
 					"host": [
 						"localhost"
 					],
 					"port": "8000",
 					"path": [
 						"isSlotConfirmed",
-						"353110309"
+						"354390471"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "latest",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/cache/latest",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"cache",
+						"latest"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "lru",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/cache/lru",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"cache",
+						"lru"
 					]
 				}
 			},

@@ -1,4 +1,4 @@
-# Solana Caching Web Service
+# Multi-Tier Caching Service for Solana
 
 A simple, efficient Rust-based web service for caching recently confirmed slots on the Solana blockchain. This service
 provides a fast way to check if a recent slot has been confirmed via a lightweight HTTP API.
@@ -73,50 +73,8 @@ RPC provider. When a request for a slot is received, the service performs the fo
 
 ## Fault Tolerance
 
-The service is designed to be resilient to transient network or RPC provider issues.
-
-### Retry with Exponential Backoff
-
-The background polling service (`slot_poller`) implements a retry mechanism for its RPC calls. If a call to fetch blocks
-fails, the service will not immediately give up. Instead, it will:
-
-1. Wait for an initial backoff period (e.g., 500ms).
-2. Retry the operation.
-3. If it fails again, it will double the backoff period (1s, 2s, etc.) and retry up to a configurable maximum number of
-   attempts.
-
-This prevents temporary network glitches from interrupting the caching process.
-
-### Intelligent Retry with Exponential Backoff
-
-The background polling service implements a "smart" retry mechanism for its RPC calls. It classifies errors to decide
-whether an operation is worth retrying.
-
-* **Transient Errors**: If a call fails with a temporary network issue (e.g., a timeout or connection error), the
-  service will not give up. It will wait for an initial backoff period, retry the operation, and double the backoff
-  period for each subsequent failure, up to a configurable maximum number of attempts.
-* **Permanent Errors**: If a call fails with a non-transient error (e.g., an invalid API key or a malformed request),
-  the service will fail immediately, log a critical error, and will **not** attempt to retry.
-
-This intelligent classification makes the poller highly efficient, preventing it from wasting time and resources on
-operations that are guaranteed to fail.
-
-### Configuration Guard Logic
-
-To prevent a situation where the retry backoff periods could overlap with the next scheduled poll, the application
-performs a validation check on startup. It calculates the maximum possible time the retry logic could take and compares
-it against the main polling interval. If the retry duration could exceed the interval, the application will refuse to
-start and will log a fatal configuration error, ensuring predictable behavior.
-
-### Graceful Shutdown
-
-The service implements a graceful shutdown mechanism. When a shutdown signal (like `Ctrl+C`) is received:
-
-1. The `axum` web server stops accepting new connections and allows any in-flight requests to complete.
-2. A shutdown signal is sent to the background polling task, causing it to exit its loop cleanly.
-3. The application then terminates.
-
-This ensures that the service shuts down predictably without interrupting ongoing operations.
+The service is designed to be highly resilient to transient network or RPC provider issues through a multi-layered
+defense strategy.
 
 ### Circuit Breaker Pattern
 
@@ -125,11 +83,36 @@ be failing.
 
 * **Monitoring**: The circuit breaker tracks consecutive failures from RPC calls.
 * **Opening the Circuit**: If the number of failures exceeds a configurable threshold, the circuit "opens." While open,
-  all subsequent RPC calls are blocked immediately without a network request, returning an error instantly. This
-  prevents the application from wasting resources on a failing dependency and gives the external service time to
-  recover.
+  all subsequent RPC calls are blocked immediately, returning an error instantly. This prevents the application from
+  wasting resources on a failing dependency and gives the external service time to recover.
 * **Recovery**: After a configured timeout, the circuit moves to a "half-open" state, allowing a single test request
-  through. If it succeeds, the circuit closes and normal operation resumes. If it fails, the circuit opens again.
+  through. If it succeeds, the circuit closes and normal operation resumes.
+
+### Intelligent Retry with Exponential Backoff
+
+Wrapped inside the circuit breaker, the service uses a "smart" retry mechanism for individual RPC calls. It classifies
+errors to decide whether an operation is worth retrying.
+
+* **Transient Errors**: If a call fails with a temporary network issue (e.g., a timeout), the service will retry with an
+  increasing delay (exponential backoff) up to a configurable maximum number of attempts.
+* **Permanent Errors**: If a call fails with a non-transient error (e.g., an invalid API key), it will fail immediately
+  without retrying.
+
+### Configuration Guard Logic
+
+To prevent a situation where retry delays could overlap with the next scheduled poll, the application validates the
+configuration on startup. If the retry strategy is incompatible with the polling interval, the service will refuse to
+start with a clear error message, ensuring predictable behavior.
+
+### Graceful Shutdown
+
+The service implements a graceful shutdown mechanism. When a shutdown signal (like `Ctrl+C`) is received, the web server
+stops accepting new connections, allows in-flight requests to complete, and cleanly stops the background polling task
+before the application terminates.
+
+Example of output
+
+![Shutdown](./assets/shutdown.png)
 
 -----
 
@@ -198,6 +181,9 @@ POLL_INTERVAL_SECONDS=5
 # The maximum number of slots to hold in the cache
 CACHE_CAPACITY=10000
 
+# The maximum number of slots to hold in the LRU cache
+LRU_CACHE_CAPACITY=1000
+
 # The maximum number of times to retry a failed RPC call
 MAX_RETRIES=3
 
@@ -241,6 +227,9 @@ POLL_INTERVAL_SECONDS=5
 # The maximum number of slots to hold in the cache
 CACHE_CAPACITY=10000
 
+# The maximum number of slots to hold in the LRU cache
+LRU_CACHE_CAPACITY=1000
+
 # The maximum number of times to retry a failed RPC call
 MAX_RETRIES=3
 
@@ -265,6 +254,8 @@ cargo run
 -----
 
 ## API Endpoint
+
+The project includes a Postman collection, i.e. solana-caching-service.postman_collection.json
 
 ### Health Check
 
@@ -291,6 +282,34 @@ A simple health check endpoint that returns a `pong` response, which can be used
     * **`404 Not Found`**: The slot is not confirmed.
     * **`500 Internal Server Error`**: An unexpected error occurred (e.g., the RPC endpoint was unreachable).
 
+### Cache Inspection Endpoints
+
+These endpoints provide a view into the current state of the caches for debugging and observability.
+
+#### Get Latest Slots
+
+Returns all slots currently held in the primary cache (the most recent slots).
+
+* **Endpoint**: `GET /cache/latest`
+* **Example**:
+  ```sh
+  curl http://localhost:8000/cache/latest
+  ```
+* **Response**:
+    * **`200 OK`**: with a JSON body containing an array of slot numbers, e.g., `[353110300, 353110301, 353110302]`.
+
+#### Get LRU Slots
+
+Returns all slots currently held in the secondary LRU cache (older, on-demand slots).
+
+* **Endpoint**: `GET /cache/lru`
+* **Example**:
+  ```sh
+  curl http://localhost:8000/cache/lru
+  ```
+* **Response**:
+    * **`200 OK`**: with a JSON body containing an array of slot numbers, e.g., `[234567890, 198765432]`.
+
 -----
 
 ## Running Tests
@@ -300,3 +319,7 @@ The project includes a full test suite that mocks all external dependencies. To 
 ```sh
 cargo test
 ```
+
+Example of output:
+
+![Tests](./assets/tests.png)
