@@ -15,7 +15,7 @@ impl SlotCache {
         Self {
             slots: HashMap::new(),
             order: RwLock::new(VecDeque::with_capacity(capacity)),
-            capacity: capacity,
+            capacity,
         }
     }
 
@@ -39,5 +39,9 @@ impl SlotCache {
                 }
             }
         }
+    }
+
+    pub async fn get_all_slots(&self) -> Vec<u64> {
+        self.order.read().await.iter().cloned().collect()
     }
 }

@@ -4,9 +4,13 @@ use axum::{
     http::StatusCode,
 };
 use mockall::{mock, predicate::*};
+use solana_caching_service::circuit_breaker::CircuitBreaker;
 use solana_caching_service::{
-    cache::SlotCache, handler::slot_handler::check_slot_confirmation_handler, metrics::Metrics,
-    rpc::RpcApi, state::AppState,
+    cache::{LruCache, SlotCache},
+    handler::slot_handler::check_slot_confirmation_handler,
+    metrics::Metrics,
+    rpc::RpcApi,
+    state::AppState,
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
@@ -35,12 +39,17 @@ mock! {
 fn create_test_app_state(
     mock_rpc: MockRpcApi,
     cache: Arc<SlotCache>,
+    lru_cache: Arc<LruCache>,
     mock_metrics: MockMetrics,
 ) -> AppState {
+    let circuit_breaker = Arc::new(CircuitBreaker::new(3, Duration::from_secs(10)));
+
     AppState {
         rpc_client: Arc::new(mock_rpc),
         cache,
+        lru_cache,
         metrics: Arc::new(mock_metrics),
+        circuit_breaker,
     }
 }
 
@@ -48,6 +57,7 @@ fn create_test_app_state(
 async fn test_handler_returns_200_ok_on_confirmed() {
     let cache = Arc::new(SlotCache::new(10));
     cache.insert(100).await;
+    let lru_cache = Arc::new(LruCache::new(10));
     let mock_rpc = MockRpcApi::new();
     let mut mock_metrics = MockMetrics::new();
 
@@ -56,7 +66,7 @@ async fn test_handler_returns_200_ok_on_confirmed() {
         .times(1)
         .return_const(());
 
-    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
+    let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
     let response = check_slot_confirmation_handler(State(app_state), Path(100))
         .await
@@ -68,6 +78,7 @@ async fn test_handler_returns_200_ok_on_confirmed() {
 #[tokio::test]
 async fn test_handler_returns_404_not_found() {
     let cache = Arc::new(SlotCache::new(10));
+    let lru_cache = Arc::new(LruCache::new(10));
     let mut mock_rpc = MockRpcApi::new();
     let mut mock_metrics = MockMetrics::new();
 
@@ -80,7 +91,7 @@ async fn test_handler_returns_404_not_found() {
         .times(1)
         .return_const(());
 
-    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
+    let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
     let response = check_slot_confirmation_handler(State(app_state), Path(200))
         .await
@@ -92,6 +103,7 @@ async fn test_handler_returns_404_not_found() {
 #[tokio::test]
 async fn test_handler_returns_500_on_rpc_error() {
     let cache = Arc::new(SlotCache::new(10));
+    let lru_cache = Arc::new(LruCache::new(10));
     let mut mock_rpc = MockRpcApi::new();
     let mut mock_metrics = MockMetrics::new();
 
@@ -108,7 +120,7 @@ async fn test_handler_returns_500_on_rpc_error() {
         .times(1)
         .return_const(());
 
-    let app_state = create_test_app_state(mock_rpc, cache, mock_metrics);
+    let app_state = create_test_app_state(mock_rpc, cache, lru_cache, mock_metrics);
 
     let response = check_slot_confirmation_handler(State(app_state), Path(300))
         .await

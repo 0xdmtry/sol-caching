@@ -13,6 +13,7 @@ pub struct Config {
     pub initial_backoff: Duration,
     pub circuit_failure_threshold: u32,
     pub circuit_open_duration: Duration,
+    pub lru_cache_capacity: usize,
 }
 
 impl Config {
@@ -76,6 +77,11 @@ impl Config {
             .unwrap_or(30);
         let circuit_open_duration = Duration::from_secs(circuit_open_duration_secs);
 
+        let lru_cache_capacity = vars
+            .get("LRU_CACHE_CAPACITY")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(100);
+
         Ok(Config {
             rpc_url,
             api_key,
@@ -85,6 +91,7 @@ impl Config {
             initial_backoff,
             circuit_failure_threshold,
             circuit_open_duration,
+            lru_cache_capacity,
         })
     }
 }

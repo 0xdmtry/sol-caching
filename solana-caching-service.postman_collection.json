@@ -1,0 +1,105 @@
+{
+	"info": {
+		"_postman_id": "39ec2291-deb2-4539-b76e-7b8d265c7222",
+		"name": "solana-caching-service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "7700049",
+		"_collection_link": "https://bckp33.postman.co/workspace/str~69fa7503-6cae-448c-a22e-06876a002add/collection/7700049-39ec2291-deb2-4539-b76e-7b8d265c7222?action=share&source=collection_link&creator=7700049"
+	},
+	"item": [
+		{
+			"name": "ping",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "isSlotConfirmed",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/isSlotConfirmed/354404485",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"isSlotConfirmed",
+						"354404485"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "isSlotConfirmed-LRU",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/isSlotConfirmed/354401401",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"isSlotConfirmed",
+						"354401401"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "latest",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/cache/latest",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"cache",
+						"latest"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "lru",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/cache/lru",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"cache",
+						"lru"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
