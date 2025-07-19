@@ -31,14 +31,33 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "localhost:8000/isSlotConfirmed/354390471",
+					"raw": "localhost:8000/isSlotConfirmed/354404485",
 					"host": [
 						"localhost"
 					],
 					"port": "8000",
 					"path": [
 						"isSlotConfirmed",
-						"354390471"
+						"354404485"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "isSlotConfirmed-LRU",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:8000/isSlotConfirmed/354401401",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"isSlotConfirmed",
+						"354401401"
 					]
 				}
 			},

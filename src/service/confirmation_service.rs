@@ -38,10 +38,7 @@ pub async fn confirm(app_state: &AppState, slot: u64) -> ConfirmationStatus {
     status
 }
 
-pub async fn confirm_with_lru(
-    app_state: &AppState,
-    slot: u64,
-) -> ConfirmationStatus {
+pub async fn confirm_with_lru(app_state: &AppState, slot: u64) -> ConfirmationStatus {
     let now = Instant::now();
 
     let status = {
@@ -73,20 +70,15 @@ pub async fn confirm_with_lru(
     status
 }
 
-pub async fn confirm_with_lru_and_breaker(
-    app_state: &AppState,
-    slot: u64,
-) -> ConfirmationStatus {
+pub async fn confirm_with_lru_and_breaker(app_state: &AppState, slot: u64) -> ConfirmationStatus {
     let now = Instant::now();
 
     let status = {
         if app_state.cache.contains(&slot).await {
             ConfirmationStatus::Confirmed
-        }
-        else if app_state.lru_cache.get(&slot).await {
+        } else if app_state.lru_cache.get(&slot).await {
             ConfirmationStatus::Confirmed
-        }
-        else {
+        } else {
             let rpc_call = || app_state.rpc_client.get_blocks(slot, Some(slot));
             match app_state.circuit_breaker.execute(rpc_call).await {
                 Ok(blocks) => {

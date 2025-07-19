@@ -1,7 +1,5 @@
 use crate::{
-    service::confirmation_service::{
-        ConfirmationStatus, confirm_with_lru_and_breaker,
-    },
+    service::confirmation_service::{ConfirmationStatus, confirm_with_lru_and_breaker},
     state::AppState,
 };
 use axum::{

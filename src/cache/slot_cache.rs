@@ -15,7 +15,7 @@ impl SlotCache {
         Self {
             slots: HashMap::new(),
             order: RwLock::new(VecDeque::with_capacity(capacity)),
-            capacity: capacity,
+            capacity,
         }
     }
 

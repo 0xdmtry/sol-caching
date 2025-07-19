@@ -222,7 +222,7 @@ pub fn poll_with_transient_retry_and_signals<T: RpcApi + 'static + ?Sized>(
                 }
                 _ = sleep(poll_interval) => {
                 }
-            };
+            }
 
             info!("cache: {:?}", cache);
 
@@ -293,7 +293,7 @@ pub fn poll_with_transient_retry_and_signals_and_breaker<T: RpcApi + 'static + ?
                     break;
                 }
                 _ = sleep(poll_interval) => {}
-            };
+            }
 
             let get_slot_call = || rpc_client.get_slot();
             let latest_on_chain = match circuit_breaker.execute(get_slot_call).await {

@@ -5,8 +5,7 @@ use solana_caching_service::{
     metrics::Metrics,
     rpc::RpcApi,
     service::slot_poller::{
-        poll, poll_with_retry, poll_with_transient_retry,
-        poll_with_transient_retry_and_signals,
+        poll, poll_with_retry, poll_with_transient_retry, poll_with_transient_retry_and_signals,
         poll_with_transient_retry_and_signals_and_breaker,
     },
 };

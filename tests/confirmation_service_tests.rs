@@ -5,8 +5,7 @@ use solana_caching_service::{
     metrics::Metrics,
     rpc::RpcApi,
     service::confirmation_service::{
-        ConfirmationStatus, confirm, confirm_with_lru,
-        confirm_with_lru_and_breaker,
+        ConfirmationStatus, confirm, confirm_with_lru, confirm_with_lru_and_breaker,
     },
     state::AppState,
 };
