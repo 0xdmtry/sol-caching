@@ -12,6 +12,8 @@ Rust.
 
 * **Continuous Caching**: A background service continuously polls for the latest confirmed slots and stores them in a
   fixed-size in-memory cache.
+* **Two-Tier Caching**: Implements a secondary LRU cache for older, on-demand slot lookups, significantly reducing
+  redundant RPC calls for frequently queried historical data.
 * **Fault-Tolerant Polling**: The background service includes a configurable retry mechanism with exponential backoff,
   making it resilient to transient RPC errors.
 * **Configurable**: Cache capacity, polling interval, and retry strategy can be configured via a `.env` file.
@@ -38,12 +40,34 @@ The service is designed with a clean separation of concerns, organized into seve
   logic to the service layer.
 * **Service Layer**: Contains the core application logic. This includes the background polling task and the confirmation
   checking logic.
-* **Component Layer**: Consists of self-contained components like the RPC client and the in-memory cache.
+* **Component Layer**: Consists of self-contained components like the RPC client and a two-tier in-memory cache system (
+  a primary cache for recent slots and a secondary LRU cache for on-demand lookups).
 * **Dependency Injection**: The application heavily uses traits (`RpcApi`, `Metrics`) and trait objects (`Arc<dyn ...>`)
   for dependency injection. This decouples the components and makes the entire application highly testable.
 
 The entire application is containerized using Docker, ensuring a consistent environment for both development and
 deployment.
+
+-----
+
+## Caching Strategy
+
+The service uses a three-tiered lookup strategy to provide fast and efficient responses while minimizing the load on the
+RPC provider. When a request for a slot is received, the service performs the following steps in order:
+
+1. **Check Primary Cache (Tier 1)**: It first checks the primary `SlotCache`, which holds the most recent slots
+   populated by the background poller. This is the fastest path for recently confirmed slots.
+
+2. **Check LRU Cache (Tier 2)**: If the slot is not found in the primary cache, it then checks the secondary `LruCache`.
+   This cache stores older slots that have been previously requested on-demand. This provides a fast path for "hot" but
+   older slots.
+
+3. **RPC Fallback (Tier 3)**: If the slot is not found in either cache, the service performs a fallback query to the
+   Solana RPC endpoint.
+
+4. **Populate LRU Cache**: If the RPC query successfully confirms the slot, the slot number is then added to the
+   `LruCache` before the response is sent. This ensures that subsequent requests for the same older slot will be served
+   quickly from the Tier 2 cache.
 
 -----
 
