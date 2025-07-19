@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use mockall::{mock, predicate::*};
+use solana_caching_service::circuit_breaker::CircuitBreaker;
 use solana_caching_service::{
     cache::{LruCache, SlotCache},
     handler::slot_handler::check_slot_confirmation_handler,
@@ -41,11 +42,14 @@ fn create_test_app_state(
     lru_cache: Arc<LruCache>,
     mock_metrics: MockMetrics,
 ) -> AppState {
+    let circuit_breaker = Arc::new(CircuitBreaker::new(3, Duration::from_secs(10)));
+
     AppState {
         rpc_client: Arc::new(mock_rpc),
         cache,
         lru_cache,
         metrics: Arc::new(mock_metrics),
+        circuit_breaker,
     }
 }
 

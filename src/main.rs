@@ -1,3 +1,4 @@
+use solana_caching_service::circuit_breaker::CircuitBreaker;
 use solana_caching_service::metrics::LoggingMetrics;
 use solana_caching_service::metrics::Metrics;
 use solana_caching_service::{
@@ -5,7 +6,7 @@ use solana_caching_service::{
     config::Config,
     routes::create_router,
     rpc::RpcApi,
-    service::slot_poller::start_slot_polling_with_transient_retry_and_signals,
+    service::slot_poller::start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker,
     signals::shutdown_signal,
     state::AppState,
 };
@@ -29,11 +30,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = Arc::new(SlotCache::new(config.cache_capacity));
     let lru_cache = Arc::new(LruCache::new(config.lru_cache_capacity));
     let metrics: Arc<dyn Metrics + Send + Sync> = Arc::new(LoggingMetrics);
+    let circuit_breaker = Arc::new(CircuitBreaker::new(
+        config.circuit_failure_threshold,
+        config.circuit_open_duration,
+    ));
 
-    start_slot_polling_with_transient_retry_and_signals(
+    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
         rpc_client.clone(),
         cache.clone(),
         metrics.clone(),
+        circuit_breaker.clone(),
         config.poll_interval,
         config.max_retries,
         config.initial_backoff,
@@ -45,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cache,
         lru_cache,
         metrics,
+        circuit_breaker,
     };
 
     let app = create_router(app_state);

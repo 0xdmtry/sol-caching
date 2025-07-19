@@ -1,5 +1,6 @@
 use crate::{
     cache::{LruCache, SlotCache},
+    circuit_breaker::CircuitBreaker,
     metrics::Metrics,
     rpc::RpcApi,
 };
@@ -11,4 +12,5 @@ pub struct AppState {
     pub cache: Arc<SlotCache>,
     pub lru_cache: Arc<LruCache>,
     pub metrics: Arc<dyn Metrics + Send + Sync>,
+    pub circuit_breaker: Arc<CircuitBreaker>,
 }

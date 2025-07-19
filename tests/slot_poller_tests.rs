@@ -1,11 +1,13 @@
 use mockall::{Sequence, mock, predicate::*};
 use solana_caching_service::{
     cache::SlotCache,
+    circuit_breaker::CircuitBreaker,
     metrics::Metrics,
     rpc::RpcApi,
     service::slot_poller::{
         start_slot_polling, start_slot_polling_with_retry, start_slot_polling_with_transient_retry,
         start_slot_polling_with_transient_retry_and_signals,
+        start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker,
     },
 };
 use solana_client::client_error::{ClientError, ClientErrorKind};
@@ -423,4 +425,101 @@ async fn test_poller_with_signals_shuts_down_gracefully() {
     let _ = shutdown_tx.send(());
 
     tokio::time::sleep(Duration::from_millis(50)).await;
+}
+
+#[tokio::test]
+async fn test_final_poller_works_when_circuit_is_closed() {
+    // Arrange
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
+    let circuit_breaker = Arc::new(CircuitBreaker::new(3, Duration::from_secs(10)));
+    let (_shutdown_tx, shutdown_rx) = broadcast::channel(1);
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .returning(|| Box::pin(async { Ok(100) }));
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(vec![95]) }));
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics
+        .expect_record_latest_slot()
+        .times(1)
+        .return_const(());
+
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        circuit_breaker,
+        Duration::from_millis(10),
+        3,
+        Duration::from_millis(5),
+        shutdown_rx,
+    );
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert!(cache.contains(&95).await);
+}
+
+#[tokio::test]
+async fn test_final_poller_is_blocked_by_open_circuit() {
+    let cache = Arc::new(SlotCache::new(20));
+    let mut mock_rpc = MockRpcApi::new();
+    let mut mock_metrics = MockMetrics::new();
+    let circuit_breaker = Arc::new(CircuitBreaker::new(1, Duration::from_secs(10)));
+    let (_shutdown_tx, shutdown_rx) = broadcast::channel(1);
+
+    let mut seq = Sequence::new();
+
+    mock_rpc
+        .expect_get_slot()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|| Box::pin(async { Ok(100) }));
+    mock_rpc
+        .expect_get_blocks()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_, _| {
+            let err = ClientError {
+                kind: ClientErrorKind::Custom("RPC Down".into()),
+                request: None,
+            };
+            Box::pin(async { Err(err) })
+        });
+
+    mock_metrics
+        .expect_record_get_blocks_elapsed()
+        .times(1)
+        .return_const(());
+    mock_metrics.expect_record_latest_slot().times(0);
+
+    let rpc_client = Arc::new(mock_rpc);
+    let metrics = Arc::new(mock_metrics);
+
+    start_slot_polling_with_transient_retry_and_signals_and_circuit_breaker(
+        rpc_client,
+        cache.clone(),
+        metrics,
+        circuit_breaker,
+        Duration::from_millis(20),
+        0,
+        Duration::from_millis(5),
+        shutdown_rx,
+    );
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert_eq!(cache.get_latest_cached_slot().await, None);
 }
